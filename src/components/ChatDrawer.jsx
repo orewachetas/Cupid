@@ -32,10 +32,10 @@ export default function ChatDrawer({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-2xl bg-white dark:bg-[#16161D] h-full shadow-2xl flex flex-col md:flex-row border-l border-cupid-primary/30 overflow-hidden">
+      <div className="w-full max-w-2xl bg-white dark:bg-[#16161D] h-[100dvh] shadow-2xl flex flex-col md:flex-row border-l border-cupid-primary/30 overflow-hidden">
         
         {/* Left Side: Real Campus Contacts */}
-        <div className="w-full md:w-72 bg-gray-50 dark:bg-[#0B0B0E] border-r border-gray-200 dark:border-purple-900/40 flex flex-col h-full shrink-0">
+        <div className="hidden w-full md:w-72 bg-gray-50 dark:bg-[#0B0B0E] border-r border-gray-200 dark:border-purple-900/40 md:flex flex-col h-full shrink-0">
           
           {/* Contacts Header */}
           <div className="p-4 border-b border-gray-200 dark:border-purple-900/40 flex items-center justify-between">
@@ -73,7 +73,9 @@ export default function ChatDrawer({ isOpen, onClose }) {
                     }`}
                   >
                     <div className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${badge.gradient} flex items-center justify-center text-white font-extrabold text-sm shadow-sm shrink-0`}>
-                      {badge.initial}
+                      {person.photoUrl || person.photo ? (
+                        <img src={person.photoUrl || person.photo} alt={`${person.name}'s profile`} className="w-full h-full rounded-2xl object-cover" />
+                      ) : badge.initial}
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -107,7 +109,9 @@ export default function ChatDrawer({ isOpen, onClose }) {
             <div className="p-4 border-b border-gray-100 dark:border-purple-900/30 flex items-center justify-between bg-white/80 dark:bg-[#16161D]/80 backdrop-blur-md">
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-2xl bg-gradient-to-tr ${getAvatarBadge(targetUser.name, targetUser.gender).gradient} flex items-center justify-center text-white font-black text-sm shadow-sm`}>
-                  {getAvatarBadge(targetUser.name, targetUser.gender).initial}
+                  {targetUser.photoUrl || targetUser.photo ? (
+                    <img src={targetUser.photoUrl || targetUser.photo} alt={`${targetUser.name}'s profile`} className="w-full h-full rounded-2xl object-cover" />
+                  ) : getAvatarBadge(targetUser.name, targetUser.gender).initial}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
@@ -119,7 +123,7 @@ export default function ChatDrawer({ isOpen, onClose }) {
                     </span>
                   </div>
                   <p className="text-[11px] font-semibold text-gray-500 dark:text-purple-300">
-                    {targetUser.major || 'College Student'} • Active Now 🟢
+                    {targetUser.major || 'College Student'}
                   </p>
                 </div>
               </div>
@@ -148,23 +152,42 @@ export default function ChatDrawer({ isOpen, onClose }) {
               ) : (
                 chatMessages.map((msg, idx) => {
                   const isMe = msg.senderId === currentUser.uid;
+                  const msgUser = isMe ? currentUser : targetUser;
+                  const badge = getAvatarBadge(msgUser?.name || 'User', msgUser?.gender || 'Male');
+                  
                   return (
                     <div
                       key={msg.id || idx}
-                      className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-fade-in`}
+                      className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} animate-fade-in`}
                     >
-                      <div
-                        className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-xs font-medium leading-relaxed shadow-sm ${
-                          isMe
-                            ? 'bg-cupid-primary text-white rounded-br-none'
-                            : 'bg-white dark:bg-[#22222E] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-purple-900/40 rounded-bl-none'
-                        }`}
-                      >
-                        {msg.text}
+                      <div className={`flex gap-2 max-w-[85%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                        
+                        {/* Avatar */}
+                        {msgUser?.photoUrl || msgUser?.photo ? (
+                          <img src={msgUser.photoUrl || msgUser.photo} alt={`${msgUser?.name || 'User'}'s profile`} className="w-8 h-8 rounded-full object-cover shrink-0 shadow-sm border border-gray-200 dark:border-purple-900/40" />
+                        ) : (
+                          <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${badge.gradient} flex items-center justify-center text-white font-extrabold text-xs shrink-0 shadow-sm`}>
+                            {badge.initial}
+                          </div>
+                        )}
+
+                        {/* Message Bubble */}
+                        <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                          <div
+                            className={`px-4 py-2.5 rounded-2xl text-xs font-medium leading-relaxed shadow-sm ${
+                              isMe
+                                ? 'bg-cupid-primary text-white rounded-tr-sm'
+                                : 'bg-white dark:bg-[#22222E] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-purple-900/40 rounded-tl-sm'
+                            }`}
+                          >
+                            {msg.text}
+                          </div>
+                          <span className="text-[9px] font-semibold text-gray-400 dark:text-gray-500 mt-1 px-1">
+                            {msg.time} {isMe && '✓✓'}
+                          </span>
+                        </div>
+                        
                       </div>
-                      <span className="text-[9px] font-semibold text-gray-400 dark:text-gray-500 mt-1 px-1">
-                        {msg.time} {isMe && '✓✓'}
-                      </span>
                     </div>
                   );
                 })

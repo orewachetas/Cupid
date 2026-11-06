@@ -4,6 +4,8 @@ import {
   signInAnonymously, 
   onAuthStateChanged,
   createUserWithEmailAndPassword,
+  linkWithCredential,
+  EmailAuthProvider,
   signInWithEmailAndPassword,
   signOut,
   deleteUser,
@@ -20,6 +22,7 @@ import {
   onSnapshot, 
   addDoc, 
   query, 
+  where,
   orderBy, 
   serverTimestamp, 
   updateDoc,
@@ -42,7 +45,8 @@ export function getFirebaseConfig() {
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "cupid-3874c",
     storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "cupid-3874c.firebasestorage.app",
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "337770116871",
-    appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:337770116871:web:cupid3874c"
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:337770116871:web:e8676e91ddac416fd4f7a2",
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-5EH4XFH97W"
   };
 }
 
@@ -70,6 +74,8 @@ export {
   signInAnonymously,
   onAuthStateChanged,
   createUserWithEmailAndPassword,
+  linkWithCredential,
+  EmailAuthProvider,
   signInWithEmailAndPassword,
   signOut,
   deleteUser,
@@ -83,9 +89,9 @@ export {
   onSnapshot,
   addDoc,
   query,
+  where,
   orderBy,
   serverTimestamp,
   updateDoc,
   deleteDoc
 };
-

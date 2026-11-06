@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { UserProvider, useUser } from './context/UserContext';
-import Navbar from './components/Navbar';
-import BottomNav from './components/BottomNav';
-import DiscoverFeed from './components/DiscoverFeed';
-import ChatDrawer from './components/ChatDrawer';
+import RedesignedAppNav from './components/RedesignedAppNav';
+import RedesignedTopbar from './components/RedesignedTopbar';
+import RedesignedDiscover from './components/RedesignedDiscover';
+import RedesignedMatches from './components/RedesignedMatches';
+import RedesignedMessages from './components/RedesignedMessages';
+import RedesignedProfile from './components/RedesignedProfile';
 import CampusWall from './components/CampusWall';
 import MatchQuiz from './components/MatchQuiz';
-import ProfileModal from './components/ProfileModal';
 import UserDetailModal from './components/UserDetailModal';
 import FirebaseSettingsModal from './components/FirebaseSettingsModal';
-import AuthModal from './components/AuthModal';
-import EmailLoginPage from './components/EmailLoginPage';
+import ProfileModal from './components/ProfileModal';
 import LoginPage from './components/LoginPage';
 
 class ErrorBoundary extends React.Component {
@@ -31,18 +31,20 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-cupid-lightBg dark:bg-cupid-darkBg flex items-center justify-center p-6 text-center">
-          <div className="bg-white dark:bg-[#16161D] p-8 rounded-3xl shadow-2xl border border-cupid-primary/30 max-w-lg space-y-4">
-            <h2 className="text-xl font-extrabold text-gray-900 dark:text-white">💘 Cupid App Notice</h2>
-            <p className="text-xs font-semibold text-gray-600 dark:text-gray-300">
-              An unexpected issue occurred while rendering components:
+        <div className="min-h-screen flex items-center justify-center p-6 text-center" style={{ background: 'var(--cream, #f8f5ed)' }}>
+          <div style={{ background: '#fff', padding: '32px', borderRadius: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.1)', border: '1px solid var(--line, #e9e2e3)', maxWidth: '500px' }}>
+            <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: '24px', fontWeight: 700, color: 'var(--ink, #281522)', margin: '0 0 12px' }}>
+              💘 Cupid Notice
+            </h2>
+            <p style={{ fontSize: '13px', color: 'var(--muted, #81737b)', margin: '0 0 16px' }}>
+              An issue occurred while rendering the page:
             </p>
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-2xl text-left text-xs font-mono text-red-600 dark:text-red-400 overflow-x-auto max-h-40">
+            <div style={{ padding: '12px', background: 'rgba(238, 121, 109, 0.1)', border: '1px solid rgba(238, 121, 109, 0.3)', borderRadius: '12px', textAlign: 'left', fontSize: '11px', fontFamily: 'monospace', color: '#c53929', overflowX: 'auto', maxHeight: '140px', marginBottom: '16px' }}>
               {this.state.error?.toString() || 'Unknown rendering error'}
             </div>
             <button
               onClick={() => { localStorage.clear(); window.location.reload(); }}
-              className="px-6 py-3 rounded-2xl bg-cupid-primary hover:bg-cupid-primaryHover text-white font-extrabold text-xs shadow-md transition-all"
+              style={{ padding: '10px 24px', borderRadius: '12px', background: 'var(--coral, #ee796d)', color: '#fff', fontWeight: 700, fontSize: '13px', border: 0, cursor: 'pointer' }}
             >
               Reset App Data & Reload
             </button>
@@ -55,59 +57,84 @@ class ErrorBoundary extends React.Component {
 }
 
 function CupidMainApp({ onLogout }) {
-  const [activeTab, setActiveTab] = useState('feed');
+  const [screen, setScreen] = useState('discover'); // 'discover' | 'matches' | 'messages' | 'wall' | 'quiz' | 'profile'
+  const [chatId, setChatId] = useState('figma-1');
   const [selectedProfileDetail, setSelectedProfileDetail] = useState(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const { activeChatUser, setActiveChatUser, logoutUser } = useUser();
+
+  const { activeChatUser, setActiveChatUser, logoutUser, likedIds = [] } = useUser();
 
   const handleLogout = () => {
     logoutUser();
     if (onLogout) onLogout();
   };
 
+  const handleOpenChat = (id = 'figma-1') => {
+    setChatId(id);
+    setActiveChatUser(id);
+    setScreen('messages');
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-cupid-lightBg dark:bg-cupid-darkBg text-gray-900 dark:text-gray-100 transition-colors duration-300 pb-20">
-      
-      {/* Top Header Navigation (Logo on Left, Live Chat Icon ONLY on Right) */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        onOpenAuthModal={handleLogout}
+    <main className="app-shell">
+      {/* 1. Left Sidebar Navigation (and bottom bar on mobile) */}
+      <RedesignedAppNav
+        screen={screen}
+        setScreen={setScreen}
+        unreadCount={2}
+        matchCount={likedIds.length || 4}
+        onLogout={handleLogout}
       />
 
-      {/* Main Tab Content */}
-      <main className="flex-1 pb-6">
-        {activeTab === 'feed' && (
-          <DiscoverFeed onOpenDetail={(profile) => setSelectedProfileDetail(profile)} />
+      {/* 2. Main Content Area */}
+      <div className="app-main">
+        {screen === 'discover' && (
+          <RedesignedDiscover
+            onMessage={handleOpenChat}
+            onOpenDetail={(profile) => setSelectedProfileDetail(profile)}
+          />
         )}
-        {activeTab === 'login' && (
-          <EmailLoginPage onAuthSuccess={() => setActiveTab('feed')} />
+
+        {screen === 'matches' && (
+          <RedesignedMatches
+            onChat={handleOpenChat}
+            onOpenDetail={(profile) => setSelectedProfileDetail(profile)}
+          />
         )}
-        {activeTab === 'chat' && (
-          <div className="max-w-7xl mx-auto px-4 py-6">
-            <ChatDrawer isOpen={true} onClose={() => setActiveTab('feed')} />
+
+        {screen === 'messages' && (
+          <RedesignedMessages
+            key={chatId}
+            initialContact={chatId}
+            onOpenDetail={(profile) => setSelectedProfileDetail(profile)}
+          />
+        )}
+
+        {screen === 'wall' && (
+          <div className="screen-content">
+            <RedesignedTopbar
+              title="Campus Wall"
+              subtitle="Anonymous confessions, shoutouts & campus buzz."
+            />
+            <div className="page-pad">
+              <CampusWall />
+            </div>
           </div>
         )}
-        {activeTab === 'wall' && <CampusWall />}
-        {activeTab === 'quiz' && <MatchQuiz />}
-      </main>
 
-      {/* Slide-over Chat Drawer */}
-      {activeTab !== 'chat' && activeChatUser && (
-        <ChatDrawer isOpen={true} onClose={() => setActiveChatUser(null)} />
-      )}
+        {screen === 'quiz' && (
+          <div className="screen-content">
+            <RedesignedTopbar
+              title="Match Compatibility Quiz"
+              subtitle="Calculate your campus compatibility score."
+            />
+            <div className="page-pad">
+              <MatchQuiz />
+            </div>
+          </div>
+        )}
 
-      {/* Mandatory Profile Setup Modal (Includes Dark/Light Theme Option) */}
-      <ProfileModal onSaveSuccess={() => setActiveTab('feed')} />
-
-      {/* Login & Sign Up Modal */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-      />
-
-      {/* Firebase Config Modal */}
-      <FirebaseSettingsModal />
+        {screen === 'profile' && <RedesignedProfile />}
+      </div>
 
       {/* Student Profile Detail Modal */}
       {selectedProfileDetail && (
@@ -117,17 +144,19 @@ function CupidMainApp({ onLogout }) {
         />
       )}
 
-      {/* Fixed Bottom Navigation (Discover Singles, Campus Wall, Match Test, Profile Page) */}
-      <BottomNav
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-      />
+      {/* Firebase Settings Modal */}
+      <FirebaseSettingsModal />
 
-    </div>
+      {/* Profile Setup Modal */}
+      <ProfileModal onSaveSuccess={() => setScreen('discover')} />
+    </main>
   );
 }
 
 function RootApp() {
+  const resetVersion = '2026-09-13-reset-accounts';
+  const { logoutUser } = useUser();
+  const [isResettingAccounts] = useState(() => localStorage.getItem('cupid_reset_version') !== resetVersion);
   const [showLoginPage, setShowLoginPage] = useState(() => {
     const hasLoggedIn = localStorage.getItem('cupid_has_logged_in');
     return hasLoggedIn !== 'true';
@@ -135,13 +164,27 @@ function RootApp() {
 
   const handleLoginSuccess = () => {
     localStorage.setItem('cupid_has_logged_in', 'true');
-    setShowLoginPage(false);
+    window.location.reload();
   };
 
   const handleLogout = () => {
     localStorage.removeItem('cupid_has_logged_in');
     setShowLoginPage(true);
   };
+
+  useEffect(() => {
+    if (!isResettingAccounts) return;
+
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('cupid_'))
+      .forEach((key) => localStorage.removeItem(key));
+    localStorage.setItem('cupid_reset_version', resetVersion);
+    logoutUser();
+  }, [isResettingAccounts, logoutUser, resetVersion]);
+
+  if (isResettingAccounts) {
+    return <div className="min-h-screen" style={{ background: 'var(--cream, #f8f5ed)' }} />;
+  }
 
   if (showLoginPage) {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />;

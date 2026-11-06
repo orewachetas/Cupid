@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Heart, MessageCircle, Sparkles, MapPin, BookOpen, User, Check, Eye, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, Sparkles, MapPin, BookOpen, User, Check, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useUser } from '../context/UserContext';
 import { getAvatarBadge } from '../data/mockUsers';
 
 export default function UserCard({ profile, onOpenDetail }) {
-  const { likedIds = [], toggleLike, setActiveChatUser, removeProfileById, currentUser = {}, setIsProfileModalOpen } = useUser();
+  const { likedIds = [], toggleLike, setActiveChatUser, currentUser = {}, setIsProfileModalOpen } = useUser();
   if (!profile) return null;
 
   const isLiked = Array.isArray(likedIds) && likedIds.includes(profile.id);
@@ -88,26 +88,13 @@ export default function UserCard({ profile, onOpenDetail }) {
 
         </div>
 
-        {/* Cupid Score Badge & Delete Card */}
+        {/* Cupid Score Badge */}
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between z-10">
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-black/50 backdrop-blur-md text-white text-xs font-bold border border-white/20">
             <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
             <span>{isSelf ? '👑 You (My Profile)' : 'Real Student'}</span>
           </div>
 
-          <button
-            type="button"
-            title="Remove this profile"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (window.confirm(`Remove profile of ${profile.name || 'this student'}?`)) {
-                removeProfileById(profile.id);
-              }
-            }}
-            className="p-1.5 rounded-xl bg-black/50 hover:bg-red-600/90 text-gray-300 hover:text-white backdrop-blur-md border border-white/20 transition-all shadow-sm"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
         </div>
 
       </div>

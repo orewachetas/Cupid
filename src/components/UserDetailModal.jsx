@@ -13,6 +13,7 @@ export default function UserDetailModal({ profile, onClose }) {
 
   const isLiked = Array.isArray(likedIds) && likedIds.includes(profile.id);
   const badge = getAvatarBadge(profile.name || '', profile.gender || 'Male');
+  const profilePhoto = profile.photoUrl || profile.photo;
 
   const handleLike = () => {
     toggleLike(profile.id);
@@ -37,7 +38,7 @@ export default function UserDetailModal({ profile, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md overflow-y-auto">
       <div className="relative w-full max-w-xl bg-white dark:bg-[#16161D] rounded-3xl shadow-2xl border border-cupid-primary/30 overflow-hidden my-8 animate-heart-pop">
-        
+
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -46,11 +47,23 @@ export default function UserDetailModal({ profile, onClose }) {
           <X className="w-5 h-5" />
         </button>
 
-        {/* Top Header Banner with Clean Avatar Badge */}
-        <div className={`relative h-64 w-full bg-gradient-to-tr ${badge.gradient} flex items-center justify-center p-6 text-white`}>
-          
-          <div className="w-28 h-28 rounded-full bg-white/20 backdrop-blur-md border-4 border-white/40 flex items-center justify-center text-5xl font-black shadow-2xl">
-            {badge.initial}
+        {/* Full profile portrait over a soft, blurred version of the same photo */}
+        <div className={`relative h-64 w-full bg-gradient-to-tr ${badge.gradient} flex items-center justify-center p-6 text-white overflow-hidden`}>
+
+          {/* Blurred Background Image */}
+          {profilePhoto && (
+            <div className="absolute inset-0 z-0">
+              <img src={profilePhoto} alt="" aria-hidden="true" className="w-full h-full object-cover blur-2xl scale-125 opacity-80" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/10"></div>
+            </div>
+          )}
+
+          <div className={`relative z-10 flex items-center justify-center overflow-hidden shadow-2xl ${profilePhoto ? 'w-36 h-44 rounded-3xl border-2 border-white/70 bg-white/10' : 'w-28 h-28 rounded-full border-4 border-white/40 bg-white/20 backdrop-blur-md text-5xl font-black'}`}>
+            {profilePhoto ? (
+              <img src={profilePhoto} alt={`${profile.name}'s profile`} className="w-full h-full object-cover" />
+            ) : (
+              badge.initial
+            )}
           </div>
 
           {/* Title Badges over Photo */}
@@ -58,11 +71,10 @@ export default function UserDetailModal({ profile, onClose }) {
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-2xl font-extrabold tracking-tight">{profile.name}, {profile.age || 20}</h2>
-                <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase ${
-                  profile.relationshipStatus === 'Single'
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-cupid-primary text-white'
-                }`}>
+                <span className={`px-3 py-1 rounded-xl text-xs font-black uppercase ${profile.relationshipStatus === 'Single'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-cupid-primary text-white'
+                  }`}>
                   {profile.relationshipStatus}
                 </span>
               </div>
@@ -74,9 +86,8 @@ export default function UserDetailModal({ profile, onClose }) {
 
             <button
               onClick={handleLike}
-              className={`p-3 rounded-2xl shadow-xl transition-all transform hover:scale-110 ${
-                isLiked ? 'bg-rose-500 text-white' : 'bg-white/20 backdrop-blur-md text-white hover:bg-white/40'
-              }`}
+              className={`p-3 rounded-2xl shadow-xl transition-all transform hover:scale-110 ${isLiked ? 'bg-rose-500 text-white' : 'bg-white/20 backdrop-blur-md text-white hover:bg-white/40'
+                }`}
             >
               <Heart className={`w-5 h-5 ${isLiked ? 'fill-white' : ''}`} />
             </button>
@@ -89,7 +100,7 @@ export default function UserDetailModal({ profile, onClose }) {
 
           {/* Info Chips */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            
+
             <div className="p-3 rounded-2xl bg-gray-50 dark:bg-[#0B0B0E] border border-gray-100 dark:border-purple-900/40">
               <span className="text-[10px] font-extrabold uppercase text-gray-500 dark:text-gray-400 block">Gender</span>
               <span className="text-sm font-bold text-gray-900 dark:text-white">

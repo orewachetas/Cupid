@@ -7,6 +7,8 @@ import {
   signInAnonymously, 
   onAuthStateChanged,
   createUserWithEmailAndPassword,
+  linkWithCredential,
+  EmailAuthProvider,
   signInWithEmailAndPassword,
   signOut,
   deleteUser,
@@ -17,14 +19,46 @@ import {
   onSnapshot, 
   addDoc, 
   query, 
+  where,
   orderBy, 
   serverTimestamp,
   updateDoc,
   deleteDoc
 } from '../firebase';
-import { INITIAL_PROFILES, INITIAL_WALL_POSTS } from '../data/mockUsers';
 
 const UserContext = createContext();
+
+const sameProfileOwner = (profile, uid, email) => {
+  if (!profile) return false;
+  if (uid && (profile.id === uid || profile.uid === uid)) return true;
+  return Boolean(email && profile.email?.toLowerCase() === email.toLowerCase());
+};
+
+const replaceProfileWithoutDuplicates = (profiles, profile) => {
+  const email = profile.email?.toLowerCase();
+  let hasKeptProfile = false;
+
+  const deduped = profiles.reduce((result, existing) => {
+    if (!sameProfileOwner(existing, profile.uid, email)) {
+      result.push(existing);
+      return result;
+    }
+
+    // A stale local/Firebase record can exist under a previous ID. Keep exactly
+    // one record, always keyed to the authenticated user's current UID.
+    if (!hasKeptProfile) {
+      result.push({ ...existing, ...profile, id: profile.uid });
+      hasKeptProfile = true;
+    }
+    return result;
+  }, []);
+
+  if (!hasKeptProfile) {
+    deduped.push({ ...profile, id: profile.uid });
+  }
+
+  return deduped;
+};
 
 export const UserProvider = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState(null);
@@ -57,14 +91,6 @@ export const UserProvider = ({ children }) => {
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [profiles, setProfiles] = useState(() => {
-    // Startup clean: clear legacy cached mock profiles if running clean version
-    if (typeof window !== 'undefined' && localStorage.getItem('cupid_cleaned_stale_profiles_v4') !== 'true') {
-      localStorage.removeItem('cupid_profiles');
-      localStorage.removeItem('cupid_liked_ids');
-      localStorage.setItem('cupid_cleaned_stale_profiles_v4', 'true');
-      return [];
-    }
-
     const deletedIds = JSON.parse(localStorage.getItem('cupid_deleted_user_ids') || '[]');
     const saved = localStorage.getItem('cupid_profiles');
     if (saved) {
@@ -75,7 +101,7 @@ export const UserProvider = ({ children }) => {
         }
       } catch (e) {}
     }
-    return INITIAL_PROFILES;
+    return [];
   });
 
   const [likedIds, setLikedIds] = useState(() => {
@@ -99,7 +125,7 @@ export const UserProvider = ({ children }) => {
         if (Array.isArray(parsed)) return parsed;
       } catch (e) {}
     }
-    return INITIAL_WALL_POSTS;
+    return [];
   });
 
   // Local BroadcastChannel for live multi-tab sync when running locally
@@ -111,8 +137,7 @@ export const UserProvider = ({ children }) => {
         const { type, payload } = event.data;
         if (type === 'USER_UPDATED') {
           setProfiles(prev => {
-            const exists = prev.some(p => p.id === payload.id);
-            const updated = exists ? prev.map(p => p.id === payload.id ? payload : p) : [...prev, payload];
+            const updated = replaceProfileWithoutDuplicates(prev, { ...payload, uid: payload.uid || payload.id });
             localStorage.setItem('cupid_profiles', JSON.stringify(updated));
             return updated;
           });
@@ -224,6 +249,56 @@ export const UserProvider = ({ children }) => {
     }
   }, []);
 
+  // 4. Cloud Firestore Real-time Messages Sync
+  useEffect(() => {
+    if (!isFirebaseConfigured || !db || !currentUser?.uid) return;
+
+    try {
+      const q = query(
+        collection(db, 'messages'),
+        where('participants', 'array-contains', currentUser.uid)
+      );
+
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const loadedChats = {};
+        const messagesList = [];
+        snapshot.forEach((docSnap) => messagesList.push({ ...docSnap.data(), id: docSnap.id }));
+
+        // Sort client-side by timestamp
+        messagesList.sort((a, b) => {
+           const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp || 0);
+           const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp || 0);
+           return timeA - timeB;
+        });
+
+        // Group into chats
+        messagesList.forEach(msg => {
+          if (!msg.chatId) return;
+          if (!loadedChats[msg.chatId]) loadedChats[msg.chatId] = [];
+          loadedChats[msg.chatId].push(msg);
+        });
+
+        if (messagesList.length > 0) {
+          setChats(prev => {
+            const updated = { ...prev };
+            // Merge Firestore data into local state
+            for (const [chatId, msgs] of Object.entries(loadedChats)) {
+              updated[chatId] = msgs;
+            }
+            localStorage.setItem('cupid_all_chats', JSON.stringify(updated));
+            return updated;
+          });
+        }
+      }, (err) => {
+        console.warn("Firestore messages sync error:", err);
+      });
+
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn("Firestore messages query error:", e);
+    }
+  }, [currentUser?.uid]);
+
   // 3. Cloud Firestore Real-time Wall Posts Sync (merges live + local data)
   useEffect(() => {
     if (!isFirebaseConfigured || !db) return;
@@ -266,6 +341,41 @@ export const UserProvider = ({ children }) => {
     localStorage.setItem('cupid_profiles', JSON.stringify(profiles));
   }, [profiles]);
 
+  // Remove legacy copies of the signed-in user's profile. Older app releases
+  // could save a profile under a temporary ID before Firebase supplied the
+  // real UID, leaving duplicate cards after an update or sign-in.
+  useEffect(() => {
+    const currentUid = currentUser?.uid;
+    const currentName = currentUser?.name?.trim().toLowerCase();
+    const currentEmail = currentUser?.email?.trim().toLowerCase();
+    if (!currentUid || !currentName) return;
+
+    const staleIds = profiles
+      .filter((profile) => {
+        if (!profile?.id || profile.id === currentUid || profile.uid === currentUid) return false;
+        const sameEmail = Boolean(currentEmail && profile.email?.toLowerCase() === currentEmail);
+        const legacyNameMatch = !profile.email && profile.name?.trim().toLowerCase() === currentName;
+        return sameEmail || legacyNameMatch;
+      })
+      .map((profile) => profile.id);
+
+    if (staleIds.length === 0) return;
+
+    setProfiles((previous) => {
+      const cleaned = previous.filter((profile) => !staleIds.includes(profile.id));
+      localStorage.setItem('cupid_profiles', JSON.stringify(cleaned));
+      return cleaned;
+    });
+
+    if (isFirebaseConfigured && db) {
+      staleIds.forEach((profileId) => {
+        deleteDoc(doc(db, 'users', profileId)).catch((error) => {
+          console.warn('Firestore legacy profile cleanup error:', error);
+        });
+      });
+    }
+  }, [currentUser?.uid, currentUser?.name, currentUser?.email, profiles]);
+
   // Sync chats to localStorage
   useEffect(() => {
     localStorage.setItem('cupid_all_chats', JSON.stringify(chats));
@@ -301,15 +411,15 @@ export const UserProvider = ({ children }) => {
     }
 
     setProfiles(prev => {
-      const exists = prev.some(p => p.id === updated.uid);
-      const list = exists ? prev.map(p => p.id === updated.uid ? updated : p) : [...prev, { id: updated.uid, ...updated }];
+      const list = replaceProfileWithoutDuplicates(prev, { ...updated, id: updated.uid });
       localStorage.setItem('cupid_profiles', JSON.stringify(list));
       return list;
     });
 
     if (isFirebaseConfigured && db && updated.uid) {
       try {
-        await setDoc(doc(db, 'users', updated.uid), updated, { merge: true });
+        const { email, ...publicProfile } = updated;
+        await setDoc(doc(db, 'users', updated.uid), publicProfile, { merge: true });
       } catch (err) {
         console.warn("Firestore setDoc user error:", err);
       }
@@ -368,11 +478,12 @@ export const UserProvider = ({ children }) => {
       channel.close();
     }
 
-    // Save to Firestore if configured
     if (isFirebaseConfigured && db) {
       try {
-        await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        await addDoc(collection(db, 'messages'), {
           ...newMsg,
+          chatId,
+          participants: [currentUser.uid, targetUserId],
           timestamp: serverTimestamp()
         });
       } catch (err) {
@@ -409,7 +520,7 @@ export const UserProvider = ({ children }) => {
 
     if (isFirebaseConfigured && db) {
       try {
-        await addDoc(collection(db, 'posts'), { ...newPost, timestamp: serverTimestamp() });
+        await addDoc(collection(db, 'posts'), { ...newPost, authorUid: currentUser.uid, timestamp: serverTimestamp() });
       } catch (err) {
         console.warn("Firestore addDoc post error:", err);
       }
@@ -448,7 +559,12 @@ export const UserProvider = ({ children }) => {
 
     if (isFirebaseConfigured && auth) {
       try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // The app starts guests as anonymous Firebase users. Linking that account
+        // preserves its UID instead of creating a second profile on sign-up.
+        const anonymousUser = auth.currentUser?.isAnonymous ? auth.currentUser : null;
+        const userCredential = anonymousUser
+          ? await linkWithCredential(anonymousUser, EmailAuthProvider.credential(email, password))
+          : await createUserWithEmailAndPassword(auth, email, password);
         firebaseUserObj = userCredential.user;
         uid = userCredential.user.uid;
         setFirebaseUser(userCredential.user);
@@ -491,7 +607,7 @@ export const UserProvider = ({ children }) => {
     // Save to permanent registered accounts map
     try {
       const registered = JSON.parse(localStorage.getItem('cupid_registered_accounts') || '{}');
-      registered[email.toLowerCase()] = { ...userObj, password };
+      registered[email.toLowerCase()] = userObj;
       localStorage.setItem('cupid_registered_accounts', JSON.stringify(registered));
     } catch (e) {}
 
@@ -504,15 +620,15 @@ export const UserProvider = ({ children }) => {
 
     // Add to campus profiles
     setProfiles(prev => {
-      const exists = prev.some(p => p.id === uid || p.uid === uid);
-      const updated = exists ? prev.map(p => (p.id === uid || p.uid === uid) ? { id: uid, ...userObj } : p) : [...prev, { id: uid, ...userObj }];
+      const updated = replaceProfileWithoutDuplicates(prev, { ...userObj, id: uid });
       localStorage.setItem('cupid_profiles', JSON.stringify(updated));
       return updated;
     });
 
     if (isFirebaseConfigured && db && uid) {
       try {
-        await setDoc(doc(db, 'users', uid), userObj, { merge: true });
+        const { email: _email, ...publicProfile } = userObj;
+        await setDoc(doc(db, 'users', uid), publicProfile, { merge: true });
       } catch (err) {
         console.warn("Firestore save new user error:", err);
       }
@@ -526,6 +642,7 @@ export const UserProvider = ({ children }) => {
     const normalizedEmail = email.trim().toLowerCase();
     let uid = null;
     let foundProfile = null;
+    let hasFirebaseProfile = false;
     let authError = null;
 
     if (isFirebaseConfigured && auth) {
@@ -559,11 +676,19 @@ export const UserProvider = ({ children }) => {
       try {
         const docSnap = await getDoc(doc(db, 'users', uid));
         if (docSnap.exists()) {
+          hasFirebaseProfile = true;
           foundProfile = { ...foundProfile, ...docSnap.data() };
         }
       } catch (err) {
         console.warn("Firestore user fetch notice:", err);
       }
+    }
+
+    // Accounts from before the reset no longer have a profile document. Do not
+    // let an old Firebase Auth record recreate a deleted Cupid profile.
+    if (uid && !hasFirebaseProfile) {
+      await signOut(auth).catch(() => {});
+      throw new Error('This account was reset. Please create a new account to continue.');
     }
 
     // Check local profiles
@@ -574,11 +699,6 @@ export const UserProvider = ({ children }) => {
     // If account was NEVER registered, strictly reject login!
     if (!foundProfile && !uid) {
       throw new Error(`No account found for "${email}". You haven't registered yet — please click "Create an account" below!`);
-    }
-
-    // Verify password if stored locally
-    if (foundProfile && foundProfile.password && foundProfile.password !== password) {
-      throw new Error('Incorrect password. Please check your password or reset it.');
     }
 
     const defaultName = normalizedEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ');

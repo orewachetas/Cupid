@@ -1,1 +1,13 @@
-{"projectId":"prj_cSXJOQPT0YwpVkPUl41JivIYUBHT","orgId":"team_GAoM74onoljU7orzt2sIAj1i","projectName":"cupid-app"}
+{
+  "settings": {
+    "createdAt": 1789141354934,
+    "framework": "vite",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
