@@ -7,27 +7,21 @@ export default function RedesignedProfile() {
   const { currentUser, updateProfile } = useUser();
   const [editing, setEditing] = useState(false);
 
-  // Form states initialized with currentUser data
-  const [name, setName] = useState(currentUser?.name || 'Alex Morgan');
-  const [age, setAge] = useState(currentUser?.age || 22);
-  const [bio, setBio] = useState(currentUser?.bio || 'Film student, amateur cook, and always up for finding a new corner of the city.');
-  const [college, setCollege] = useState(currentUser?.college || 'Northbridge University');
-  const [major, setMajor] = useState(currentUser?.major || 'Media Studies');
-  const [year, setYear] = useState(currentUser?.year || 'Year 4');
+  // Form states initialized strictly with currentUser real data
+  const [name, setName] = useState(currentUser?.name || '');
+  const [age, setAge] = useState(currentUser?.age || 20);
+  const [bio, setBio] = useState(currentUser?.bio || '');
+  const [college, setCollege] = useState(currentUser?.college || '');
+  const [major, setMajor] = useState(currentUser?.major || '');
+  const [year, setYear] = useState(currentUser?.year || 'Junior');
   const [interests, setInterests] = useState(
-    Array.isArray(currentUser?.interests) && currentUser.interests.length > 0
-      ? currentUser.interests
-      : ['Film photography', 'Cooking', 'Running']
+    Array.isArray(currentUser?.interests) ? currentUser.interests : []
   );
   const [newInterest, setNewInterest] = useState('');
   const [showAddInterest, setShowAddInterest] = useState(false);
   const [promptKey, setPromptKey] = useState(currentUser?.promptKey || 'ideal');
-  const [promptAnswer, setPromptAnswer] = useState(
-    currentUser?.promptAnswer || 'A bookstore, something good to eat, and a walk with no destination.'
-  );
-  const [photoUrl, setPhotoUrl] = useState(
-    currentUser?.photoUrl || currentUser?.photo || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=900&q=86'
-  );
+  const [promptAnswer, setPromptAnswer] = useState(currentUser?.promptAnswer || '');
+  const [photoUrl, setPhotoUrl] = useState(currentUser?.photoUrl || currentUser?.photo || '');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   const handleToggleEdit = async () => {
@@ -97,15 +91,38 @@ export default function RedesignedProfile() {
           </div>
 
           <article>
-            <img src={photoUrl} alt={name} />
+            {photoUrl ? (
+              <img src={photoUrl} alt={name || 'My profile'} />
+            ) : (
+              <div
+                style={{
+                  width: '100%',
+                  height: '280px',
+                  background: 'linear-gradient(135deg, #42152f 0%, #ee796d 100%)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  padding: '20px',
+                  textAlign: 'center'
+                }}
+              >
+                <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center', fontSize: '32px', fontWeight: 800, marginBottom: '12px' }}>
+                  {name ? name.charAt(0).toUpperCase() : '?'}
+                </div>
+                <span style={{ fontSize: '13px', fontWeight: 600, opacity: 0.9 }}>No photo uploaded</span>
+                <small style={{ fontSize: '10px', opacity: 0.7, marginTop: '4px' }}>Add a photo URL in Edit Profile</small>
+              </div>
+            )}
             <div>
               <h2>
-                {name}, {age}
+                {name || 'Your Name'}, {age}
                 <span>
                   <Icon name="check" size={10} />
                 </span>
               </h2>
-              <p>{major} · {year}</p>
+              <p>{major || 'Your Major'} {college ? `· ${college}` : ''}</p>
             </div>
           </article>
 

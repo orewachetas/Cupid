@@ -1,45 +1,32 @@
 import React, { useState, useMemo } from 'react';
-import { Icon } from './FigmaIcons';
+import { Icon, Avatar } from './FigmaIcons';
 import RedesignedTopbar from './RedesignedTopbar';
 import { useUser } from '../context/UserContext';
-import { DEFAULT_FIGMA_PROFILES } from '../data/figmaData';
 
-export default function RedesignedMatches({ onChat, onOpenDetail }) {
-  const { profiles: contextProfiles = [], likedIds = [] } = useUser();
-  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'new' | 'likes'
+export default function RedesignedMatches({ onChat, onOpenDetail, onNavigateDiscover }) {
+  const { profiles: contextProfiles = [], likedIds = [], currentUser } = useUser();
+  const [activeTab, setActiveTab] = useState('all'); // 'all' | 'likes'
 
-  const allProfiles = useMemo(() => {
-    const list = contextProfiles.length > 0 ? contextProfiles : DEFAULT_FIGMA_PROFILES;
-    const combined = [...list];
-    // Pad to display a rich grid
-    if (combined.length < 6) {
-      combined.push(...DEFAULT_FIGMA_PROFILES.slice(0, 6 - combined.length));
-    }
-    return combined.map((p, idx) => ({
-      ...p,
-      match: p.match || (94 - idx * 2),
-      major: p.major || 'Computer Science · Year 3',
-      photoUrl: p.photoUrl || p.photo || DEFAULT_FIGMA_PROFILES[idx % DEFAULT_FIGMA_PROFILES.length].photoUrl
-    }));
-  }, [contextProfiles]);
+  // Only real external profiles
+  const allRealProfiles = useMemo(() => {
+    if (!Array.isArray(contextProfiles)) return [];
+    return contextProfiles.filter(p => {
+      const isMe = p.id === currentUser?.uid || p.uid === currentUser?.uid || (currentUser?.email && p.email?.toLowerCase() === currentUser?.email?.toLowerCase());
+      return !isMe;
+    });
+  }, [contextProfiles, currentUser]);
 
-  const displayedProfiles = useMemo(() => {
-    if (activeTab === 'likes') {
-      const likedSet = new Set(likedIds);
-      const filtered = allProfiles.filter(p => likedSet.has(p.id));
-      return filtered.length > 0 ? filtered : allProfiles.slice(0, 3);
-    }
-    if (activeTab === 'new') {
-      return allProfiles.slice(0, 4);
-    }
-    return allProfiles;
-  }, [activeTab, allProfiles, likedIds]);
+  const likedSet = useMemo(() => new Set(likedIds), [likedIds]);
+
+  const matchedProfiles = useMemo(() => {
+    return allRealProfiles.filter(p => likedSet.has(p.id) || likedSet.has(p.uid));
+  }, [allRealProfiles, likedSet]);
 
   return (
     <div className="screen-content">
       <RedesignedTopbar
         title="Your matches"
-        subtitle={`You’ve made ${allProfiles.length + likedIds.length} connections this month.`}
+        subtitle={matchedProfiles.length > 0 ? `You have ${matchedProfiles.length} campus connection${matchedProfiles.length === 1 ? '' : 's'}.` : "Keep connecting on campus."}
       />
 
       <div className="page-pad">
@@ -49,63 +36,126 @@ export default function RedesignedMatches({ onChat, onOpenDetail }) {
             onClick={() => setActiveTab('all')}
             type="button"
           >
-            All matches <span>{allProfiles.length}</span>
-          </button>
-          <button
-            className={activeTab === 'new' ? 'active' : ''}
-            onClick={() => setActiveTab('new')}
-            type="button"
-          >
-            New <span>4</span>
+            All matches <span>{matchedProfiles.length}</span>
           </button>
           <button
             className={activeTab === 'likes' ? 'active' : ''}
             onClick={() => setActiveTab('likes')}
             type="button"
           >
-            Your likes <span>{likedIds.length || 2}</span>
+            Your likes <span>{likedIds.length}</span>
           </button>
         </div>
 
-        <div className="matches-grid">
-          {displayedProfiles.map((person, i) => (
-            <article className="match-card" key={`${person.id}-${i}`}>
-              <div
-                className="match-photo"
-                onClick={() => onOpenDetail && onOpenDetail(person)}
-                style={{ cursor: 'pointer' }}
+        {matchedProfiles.length === 0 ? (
+          <div
+            style={{
+              padding: '60px 20px',
+              textAlign: 'center',
+              background: 'var(--paper, #fffdfa)',
+              borderRadius: '20px',
+              border: '1px solid var(--line, #e9e2e3)',
+              maxWidth: '500px',
+              margin: '30px auto'
+            }}
+          >
+            <div
+              style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'rgba(238, 121, 109, 0.15)',
+                color: 'var(--coral, #ee796d)',
+                display: 'grid',
+                placeItems: 'center',
+                margin: '0 auto 16px'
+              }}
+            >
+              <Icon name="heart" size={26} />
+            </div>
+            <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: '20px', margin: '0 0 8px', color: 'var(--ink)' }}>
+              No matches yet
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '0 0 20px', lineHeight: 1.5 }}>
+              Browse students on the Discover feed and press like when you find someone you want to meet!
+            </p>
+            {onNavigateDiscover && (
+              <button
+                type="button"
+                onClick={onNavigateDiscover}
+                style={{
+                  padding: '10px 24px',
+                  borderRadius: '12px',
+                  background: 'var(--coral, #ee796d)',
+                  color: 'white',
+                  border: 0,
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
               >
-                <img src={person.photoUrl} alt={person.name} />
-                <span>
-                  <i /> {i < 2 ? "New match" : `${person.match}% match`}
-                </span>
-              </div>
-              <div className="match-info">
-                <h3>
-                  {person.name}, {person.age || 21}
+                Go to Discover
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="matches-grid">
+            {matchedProfiles.map((person) => (
+              <article className="match-card" key={person.id}>
+                <div
+                  className="match-photo"
+                  onClick={() => onOpenDetail && onOpenDetail(person)}
+                  style={{ cursor: 'pointer', position: 'relative' }}
+                >
+                  {person.photoUrl || person.photo ? (
+                    <img src={person.photoUrl || person.photo} alt={person.name} />
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        background: 'linear-gradient(135deg, #42152f 0%, #ee796d 100%)',
+                        display: 'grid',
+                        placeItems: 'center',
+                        color: 'white'
+                      }}
+                    >
+                      <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'grid', placeItems: 'center', fontSize: '24px', fontWeight: 800 }}>
+                        {person.name ? person.name.charAt(0).toUpperCase() : '?'}
+                      </div>
+                    </div>
+                  )}
                   <span>
-                    <Icon name="check" size={9} />
+                    <i /> Liked by you
                   </span>
-                </h3>
-                <p>{person.major}</p>
-                <div>
-                  <button onClick={() => onChat(person.id)} type="button">
-                    <Icon name="message" size={17} /> Say hello
-                  </button>
-                  <button
-                    aria-label="More"
-                    type="button"
-                    onClick={() => onOpenDetail && onOpenDetail(person)}
-                  >
-                    <Icon name="more" size={18} />
-                  </button>
                 </div>
-              </div>
-            </article>
-          ))}
-        </div>
+
+                <div className="match-info">
+                  <h3>
+                    {person.name || 'Campus Student'}, {person.age || 20}
+                    <span>
+                      <Icon name="check" size={9} />
+                    </span>
+                  </h3>
+                  <p>{person.major || person.college || 'College Student'}</p>
+                  <div>
+                    <button onClick={() => onChat(person.id)} type="button">
+                      <Icon name="message" size={17} /> Say hello
+                    </button>
+                    <button
+                      aria-label="View Profile"
+                      type="button"
+                      onClick={() => onOpenDetail && onOpenDetail(person)}
+                    >
+                      <Icon name="profile" size={17} />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

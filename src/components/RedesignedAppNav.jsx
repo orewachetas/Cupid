@@ -23,9 +23,9 @@ export default function RedesignedAppNav({ screen, setScreen, unreadCount = 2, m
     { id: 'profile', label: 'Profile', icon: 'profile' },
   ];
 
-  const userName = currentUser?.name || 'Alex Morgan';
-  const userEmail = currentUser?.email || 'alex@campus.edu';
-  const userPhoto = currentUser?.photoUrl || currentUser?.photo || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=200&q=80';
+  const userName = currentUser?.name || 'My Profile';
+  const userEmail = currentUser?.email || '';
+  const userPhoto = currentUser?.photoUrl || currentUser?.photo || null;
 
   return (
     <>

@@ -111,12 +111,28 @@ export function Icon({ name, size = 20 }) {
 
 export function Avatar({ src, name, online = false }) {
   const fallbackInitial = name ? name.trim().charAt(0).toUpperCase() : '?';
+  const hasPhoto = Boolean(src && typeof src === 'string' && src.trim().length > 5);
+
   return (
     <span className="avatar-wrap">
-      {src ? (
+      {hasPhoto ? (
         <img src={src} alt={name || 'Avatar'} />
       ) : (
-        <div className="w-full h-full rounded-full bg-gradient-to-tr from-pink-500 to-rose-400 flex items-center justify-center text-white font-bold text-sm">
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #42152f 0%, #ee796d 100%)',
+            display: 'grid',
+            placeItems: 'center',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '14px',
+            textTransform: 'uppercase',
+            userSelect: 'none'
+          }}
+        >
           {fallbackInitial}
         </div>
       )}

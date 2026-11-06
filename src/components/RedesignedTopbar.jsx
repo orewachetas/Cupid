@@ -4,8 +4,8 @@ import { useUser } from '../context/UserContext';
 
 export default function RedesignedTopbar({ title, subtitle, onFilter, onAvatarClick }) {
   const { currentUser } = useUser();
-  const userName = currentUser?.name || 'Alex';
-  const userPhoto = currentUser?.photoUrl || currentUser?.photo || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=200&q=80';
+  const userName = currentUser?.name || 'Student';
+  const userPhoto = currentUser?.photoUrl || currentUser?.photo || null;
 
   return (
     <header className="app-topbar">
