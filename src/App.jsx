@@ -58,7 +58,7 @@ class ErrorBoundary extends React.Component {
 
 function CupidMainApp({ onLogout }) {
   const [screen, setScreen] = useState('discover'); // 'discover' | 'matches' | 'messages' | 'wall' | 'quiz' | 'profile'
-  const [chatId, setChatId] = useState('figma-1');
+  const [chatId, setChatId] = useState(null);
   const [selectedProfileDetail, setSelectedProfileDetail] = useState(null);
 
   const { activeChatUser, setActiveChatUser, logoutUser, likedIds = [] } = useUser();
@@ -68,11 +68,21 @@ function CupidMainApp({ onLogout }) {
     if (onLogout) onLogout();
   };
 
-  const handleOpenChat = (id = 'figma-1') => {
-    setChatId(id);
-    setActiveChatUser(id);
+  const handleOpenChat = (id) => {
+    if (id) {
+      setChatId(id);
+      setActiveChatUser(id);
+    }
     setScreen('messages');
   };
+
+  // Sync activeChatUser with screen when triggered externally (e.g. from UserDetailModal)
+  useEffect(() => {
+    if (activeChatUser) {
+      setChatId(activeChatUser);
+      setScreen('messages');
+    }
+  }, [activeChatUser]);
 
   return (
     <main className="app-shell">
@@ -80,8 +90,8 @@ function CupidMainApp({ onLogout }) {
       <RedesignedAppNav
         screen={screen}
         setScreen={setScreen}
-        unreadCount={2}
-        matchCount={likedIds.length || 4}
+        unreadCount={0}
+        matchCount={likedIds.length}
         onLogout={handleLogout}
       />
 
@@ -91,6 +101,8 @@ function CupidMainApp({ onLogout }) {
           <RedesignedDiscover
             onMessage={handleOpenChat}
             onOpenDetail={(profile) => setSelectedProfileDetail(profile)}
+            onNavigateWall={() => setScreen('wall')}
+            onNavigateProfile={() => setScreen('profile')}
           />
         )}
 
@@ -98,14 +110,16 @@ function CupidMainApp({ onLogout }) {
           <RedesignedMatches
             onChat={handleOpenChat}
             onOpenDetail={(profile) => setSelectedProfileDetail(profile)}
+            onNavigateDiscover={() => setScreen('discover')}
           />
         )}
 
         {screen === 'messages' && (
           <RedesignedMessages
-            key={chatId}
+            key={chatId || 'no-initial'}
             initialContact={chatId}
             onOpenDetail={(profile) => setSelectedProfileDetail(profile)}
+            onNavigateDiscover={() => setScreen('discover')}
           />
         )}
 

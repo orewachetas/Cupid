@@ -21,24 +21,60 @@ export default function RedesignedMessages({ initialContact, onOpenDetail, onNav
     });
   }, [contextProfiles, currentUser]);
 
-  // Real contacts list: profiles that have chats OR have been liked/matched
+  // Real contacts list: profiles that have chats OR have been liked/matched OR is the selected initialContact
   const realContacts = useMemo(() => {
-    const chatPartnerIds = new Set([
-      ...Object.keys(chats),
-      ...likedIds
-    ]);
+    const partnerIdMap = new Map(); // partnerId -> lastMsg
 
+    // 1. Scan chats to identify all conversation partners
+    if (chats && typeof chats === 'object') {
+      Object.entries(chats).forEach(([key, msgs]) => {
+        if (!Array.isArray(msgs) || msgs.length === 0) return;
+        const lastMsg = msgs[msgs.length - 1];
+
+        let partnerId = null;
+        if (key.includes('_')) {
+          const parts = key.split('_');
+          if (parts[0] === currentUser?.uid) partnerId = parts[1];
+          else if (parts[1] === currentUser?.uid) partnerId = parts[0];
+          else {
+            const partMsg = msgs.find(m => Array.isArray(m.participants) && m.participants.includes(currentUser?.uid));
+            if (partMsg) {
+              partnerId = partMsg.participants.find(id => id !== currentUser?.uid);
+            }
+          }
+        } else {
+          partnerId = key;
+        }
+
+        if (partnerId && partnerId !== currentUser?.uid) {
+          partnerIdMap.set(partnerId, lastMsg);
+        }
+      });
+    }
+
+    // 2. Include all liked/matched profiles
+    likedIds.forEach(id => {
+      if (id && id !== currentUser?.uid && !partnerIdMap.has(id)) {
+        partnerIdMap.set(id, null);
+      }
+    });
+
+    // 3. Include initialContact if provided
+    if (initialContact && initialContact !== currentUser?.uid && !partnerIdMap.has(initialContact)) {
+      partnerIdMap.set(initialContact, null);
+    }
+
+    // 4. Map to profile objects
     const list = [];
-    allRealProfiles.forEach((p) => {
-      if (chatPartnerIds.has(p.id) || chatPartnerIds.has(p.uid)) {
-        const userChats = chats[p.id] || chats[p.uid] || [];
-        const lastMsg = userChats[userChats.length - 1];
+    partnerIdMap.forEach((lastMsg, pId) => {
+      const p = allRealProfiles.find(prof => prof.id === pId || prof.uid === pId);
+      if (p) {
         list.push({
           id: p.id || p.uid,
           name: p.name || 'Campus Student',
           photoUrl: p.photoUrl || p.photo || null,
           preview: lastMsg?.text || 'Connected on campus',
-          time: lastMsg?.timestamp ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
+          time: lastMsg?.time || (lastMsg?.timestamp ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'),
           unread: 0,
           online: true,
           major: p.major || p.college || 'College Student',
@@ -47,16 +83,19 @@ export default function RedesignedMessages({ initialContact, onOpenDetail, onNav
           interests: Array.isArray(p.interests) ? p.interests : [],
           bio: p.bio || '',
           promptKey: p.promptKey || '',
-          promptAnswer: p.promptAnswer || ''
+          promptAnswer: p.promptAnswer || '',
+          lastTimestamp: lastMsg?.timestamp ? (typeof lastMsg.timestamp === 'number' ? lastMsg.timestamp : Date.now()) : 0
         });
       }
     });
 
+    // Sort by recent activity
+    list.sort((a, b) => b.lastTimestamp - a.lastTimestamp);
     return list;
-  }, [allRealProfiles, chats, likedIds]);
+  }, [allRealProfiles, chats, likedIds, initialContact, currentUser?.uid]);
 
   const [activeId, setActiveId] = useState(() => {
-    if (initialContact && realContacts.some(c => c.id === initialContact)) {
+    if (initialContact && allRealProfiles.some(c => c.id === initialContact || c.uid === initialContact)) {
       return initialContact;
     }
     return realContacts[0]?.id || null;
@@ -75,22 +114,73 @@ export default function RedesignedMessages({ initialContact, onOpenDetail, onNav
   const [draft, setDraft] = useState('');
   const chatScrollRef = useRef(null);
 
-  const activeContact = realContacts.find((c) => c.id === activeId) || realContacts[0] || null;
+  // Active contact can be in realContacts OR from allRealProfiles directly (e.g. initialContact)
+  const activeContact = useMemo(() => {
+    if (!activeId) return realContacts[0] || null;
+    const inContacts = realContacts.find(c => c.id === activeId);
+    if (inContacts) return inContacts;
+    const inProfiles = allRealProfiles.find(p => p.id === activeId || p.uid === activeId);
+    if (inProfiles) {
+      return {
+        id: inProfiles.id || inProfiles.uid,
+        name: inProfiles.name || 'Campus Student',
+        photoUrl: inProfiles.photoUrl || inProfiles.photo || null,
+        preview: 'Say hello!',
+        time: 'Now',
+        unread: 0,
+        online: true,
+        major: inProfiles.major || inProfiles.college || 'College Student',
+        age: inProfiles.age || 20,
+        distance: inProfiles.distance || 'On campus',
+        interests: Array.isArray(inProfiles.interests) ? inProfiles.interests : [],
+        bio: inProfiles.bio || '',
+        promptKey: inProfiles.promptKey || '',
+        promptAnswer: inProfiles.promptAnswer || ''
+      };
+    }
+    return realContacts[0] || null;
+  }, [activeId, realContacts, allRealProfiles]);
 
-  // Real chat messages from context
+  // Real chat messages from context with compound chatId lookup
   const activeMessages = useMemo(() => {
-    if (!activeContact) return [];
-    const fromContext = chats[activeContact.id] || [];
-    return fromContext.map(m => ({
-      from: m.sender === 'me' || m.sender === currentUser?.uid || m.senderId === currentUser?.uid ? 'me' : 'them',
+    if (!activeContact || !currentUser?.uid) return [];
+    const compoundKey = [currentUser.uid, activeContact.id].sort().join('_');
+    const msgList = chats[compoundKey] || chats[activeContact.id] || [];
+    return msgList.map(m => ({
+      id: m.id || `${m.timestamp}-${Math.random()}`,
+      from: (m.senderId === currentUser.uid || m.sender === 'me' || m.sender === currentUser.uid) ? 'me' : 'them',
       text: m.text,
-      time: m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now'
+      time: m.time || (m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Now')
     }));
-  }, [chats, activeContact, currentUser]);
+  }, [chats, activeContact, currentUser?.uid]);
 
   const shownContacts = useMemo(() => {
-    return realContacts.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()));
-  }, [realContacts, query]);
+    if (!query.trim()) return realContacts;
+    const q = query.toLowerCase();
+    // Search in existing contacts
+    const filteredContacts = realContacts.filter((c) => c.name.toLowerCase().includes(q));
+    // Also search across all other campus profiles so user can initiate chat with anyone
+    const otherCampusMatches = allRealProfiles
+      .filter(p => !realContacts.some(c => c.id === (p.id || p.uid)) && (p.name || '').toLowerCase().includes(q))
+      .map(p => ({
+        id: p.id || p.uid,
+        name: p.name || 'Campus Student',
+        photoUrl: p.photoUrl || p.photo || null,
+        preview: 'Tap to start chat',
+        time: 'Campus',
+        unread: 0,
+        online: true,
+        major: p.major || p.college || 'College Student',
+        age: p.age || 20,
+        distance: p.distance || 'On campus',
+        interests: Array.isArray(p.interests) ? p.interests : [],
+        bio: p.bio || '',
+        promptKey: p.promptKey || '',
+        promptAnswer: p.promptAnswer || ''
+      }));
+
+    return [...filteredContacts, ...otherCampusMatches];
+  }, [realContacts, allRealProfiles, query]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -116,7 +206,7 @@ export default function RedesignedMessages({ initialContact, onOpenDetail, onNav
 
   const userPhoto = currentUser?.photoUrl || currentUser?.photo || null;
 
-  if (realContacts.length === 0) {
+  if (realContacts.length === 0 && !activeContact) {
     return (
       <div className="screen-content">
         <div
@@ -150,6 +240,42 @@ export default function RedesignedMessages({ initialContact, onOpenDetail, onNav
           <p style={{ fontSize: '13px', color: 'var(--muted)', maxWidth: '320px', lineHeight: 1.5, margin: '0 0 24px' }}>
             When you match with classmates or send messages, your conversations will show up here.
           </p>
+
+          {allRealProfiles.length > 0 && (
+            <div style={{ marginBottom: '24px', width: '100%', maxWidth: '360px' }}>
+              <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--plum)', marginBottom: '12px' }}>
+                Say hello to campus classmates:
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {allRealProfiles.slice(0, 4).map(p => (
+                  <button
+                    key={p.id || p.uid}
+                    type="button"
+                    onClick={() => setActiveId(p.id || p.uid)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '10px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid var(--line, #e9e2e3)',
+                      background: 'var(--paper, #fff)',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <Avatar src={p.photoUrl || p.photo} name={p.name} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--ink)' }}>{p.name}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--muted)' }}>{p.major || 'Campus Student'}</div>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--coral)', fontWeight: 600 }}>Message</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {onNavigateDiscover && (
             <button
               type="button"

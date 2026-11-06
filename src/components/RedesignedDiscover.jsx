@@ -95,23 +95,50 @@ export default function RedesignedDiscover({ onMessage, onOpenDetail, onNavigate
 
   const activeChats = useMemo(() => {
     const list = [];
-    Object.keys(chats).forEach((chatPartnerId) => {
-      const partner = allProfiles.find(p => p.id === chatPartnerId || p.uid === chatPartnerId);
-      const messages = chats[chatPartnerId] || [];
-      const lastMsg = messages[messages.length - 1];
+    if (!chats || typeof chats !== 'object') return list;
+
+    const partnerIdMap = new Map();
+    Object.entries(chats).forEach(([key, msgs]) => {
+      if (!Array.isArray(msgs) || msgs.length === 0) return;
+      const lastMsg = msgs[msgs.length - 1];
+      let partnerId = null;
+      if (key.includes('_')) {
+        const parts = key.split('_');
+        if (parts[0] === currentUser?.uid) partnerId = parts[1];
+        else if (parts[1] === currentUser?.uid) partnerId = parts[0];
+        else {
+          const partMsg = msgs.find(m => Array.isArray(m.participants) && m.participants.includes(currentUser?.uid));
+          if (partMsg) {
+            partnerId = partMsg.participants.find(id => id !== currentUser?.uid);
+          }
+        }
+      } else {
+        partnerId = key;
+      }
+
+      if (partnerId && partnerId !== currentUser?.uid) {
+        partnerIdMap.set(partnerId, lastMsg);
+      }
+    });
+
+    partnerIdMap.forEach((lastMsg, partnerId) => {
+      const partner = allProfiles.find(p => p.id === partnerId || p.uid === partnerId);
       if (partner) {
         list.push({
-          id: partner.id,
+          id: partner.id || partner.uid,
           name: partner.name,
           photoUrl: partner.photoUrl || partner.photo || null,
           lastMessage: lastMsg?.text || 'Connected',
-          time: lastMsg?.timestamp ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent',
-          online: true
+          time: lastMsg?.time || (lastMsg?.timestamp ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recent'),
+          online: true,
+          timestamp: lastMsg?.timestamp ? (typeof lastMsg.timestamp === 'number' ? lastMsg.timestamp : Date.now()) : 0
         });
       }
     });
+
+    list.sort((a, b) => b.timestamp - a.timestamp);
     return list;
-  }, [chats, allProfiles]);
+  }, [chats, allProfiles, currentUser?.uid]);
 
   const [index, setIndex] = useState(0);
   const [saved, setSaved] = useState([]);
